@@ -4,6 +4,12 @@ options =
   https: false
   port: 3000
   dir: process.cwd() + "/../_site"
+  redis: {
+    host: "localhost"
+    port: 6379
+    password: null
+    prefix: "serve:"
+  }
   mounts: [
     {
       path: "/derp"
