@@ -26,7 +26,7 @@ getContentType = (uri) ->
     else "text/plain"
 
 class Serve
-  constructor: (options) ->
+  constructor: (options, callback) ->
     @dir = path.resolve(options.dir ? process.cwd()) + path.sep
     @port = options.port ? 3000
 
@@ -50,8 +50,12 @@ class Serve
       @cache = {}
 
     @server = http.createServer @handler
-    @server.listen @port, =>
+    @server.on "listening", =>
       log.notice "serving " + @dir + " on port "+@port
+      typeof callback == "function" && callback()
+    @server.on "error", (err) =>
+      log.error "server error" + err
+    @server.listen @port
 
   handler: (req, res) =>
     addr = req.socket.remoteAddress + ":" + req.socket.remotePort

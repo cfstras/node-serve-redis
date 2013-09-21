@@ -1,5 +1,4 @@
 Serve = require "../serve"
-log = console.log.bind console
 
 options =
   https: false
@@ -30,12 +29,4 @@ options =
     }
   ]
 
-test = ->
-  server = new Serve options, (err) ->
-    log "testing..."
-    # ... run some tests
-    log "ending..."
-    server.server.close()
-    server.redis && server.redis.quit()
-
-test
+server = new Serve options

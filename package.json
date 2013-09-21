@@ -2,12 +2,13 @@
   "name": "serve-redis",
   "version": "0.0.1",
   "description": "a caching, static, redis-backed HTTP file server",
-  "main": "lib/serve.js",
+  "main": "lib/bin/serve.js",
   "scripts": {
     "test": "npm run-script build && node --debug lib/test/test.js",
-    "build": "coffee -o lib -c src/*.coffee && coffee -o lib/test -c test/*.coffee",
+    "build": "coffee -o lib/bin -c bin/*.coffee && coffee -o lib -c src/*.coffee && coffee -o lib/test -c test/*.coffee",
     "prepublish": "npm run-script build",
-    "start": "npm run-script prepublish && node lib/serve.js"
+    "serve": "npm run-script prepublish && node lib/bin/serve.js",
+    "clean": "rm -rf lib/"
   },
   "repository": {
     "type": "git",
