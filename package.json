@@ -1,0 +1,37 @@
+{
+  "name": "serve-redis",
+  "version": "0.0.1",
+  "description": "a caching, static, redis-backed HTTP file server",
+  "main": "lib/serve.js",
+  "scripts": {
+    "test": "npm run-script build && node lib/test/test.js",
+    "build": "coffee -o lib -c src/*.coffee && coffee -o lib/test -c test/*.coffee",
+    "prepublish": "npm run-script build",
+    "start": "npm run-script prepublish && node lib/serve.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/cfstras/node-serve-redis.git"
+  },
+  "keywords": [
+    "server",
+    "http",
+    "redis",
+    "web",
+    "static",
+    "file",
+    "cache"
+  ],
+  "dependencies": {
+    "redis": ">=0.8.4",
+    "log": ">=1.4.0"
+  },
+  "devDependencies": {
+    "coffee-script": ">=1.6.3"
+  },
+  "author": "cfstras <claus@strasburger.de>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cfstras/node-serve-redis/issues"
+  }
+}
