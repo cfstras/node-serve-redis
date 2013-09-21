@@ -4,8 +4,25 @@ zlip = require "zlib"
 util = require "util"
 path = require "path"
 fs = require "fs"
+crypto = require "crypto"
 Log = require("log")
 log = new Log("notice");
+
+md5 = (data) ->
+  return crypto.createHash('md5').update(data).digest("hex")
+
+getContentType = (uri) ->
+  ext = path.extname(uri).toLowerCase()
+  switch ext
+    when ".htm", ".html" then "text/html; charset=utf-8"
+    when ".css" then "text/css"
+    when ".js" then "application/javascript"
+    when ".png" then "image/png"
+    when ".gif" then "image/gif"
+    when ".ico" then "image/x-icon"
+    when ".swf" then "application/x-shockwave-flash"
+    when /^\..+$/.test ext then "application/octet-stream"
+    else "text/plain"
 
 class Serve
   constructor: (options) ->
@@ -53,9 +70,11 @@ class Serve
           url = mount.handler
 
     #TODO look in redis cache
-    if @cache[url]?
+    if @cache.hasOwnProperty url
+      file = @cache[url]
       log.debug "from cache: " + url
-      res.end @cache[url]
+      res.writeHead 200, file.headers
+      res.end file.content
       return
 
     # load file from disk, cache it
@@ -68,7 +87,8 @@ class Serve
     if fs.existsSync localpath
       log.debug "loading "+localpath
       file = @load_and_cache localpath, url
-      res.end file
+      res.writeHead 200, file.headers
+      res.end file.content
       return
 
     # nope.
@@ -79,7 +99,16 @@ class Serve
   load_and_cache: (path, url) =>
     content = fs.readFileSync path
     #TODO cache this in redis
-    @cache[url] = content
-    return content
+    tag = md5(content)
+    file =
+      content: content
+      headers:
+        "Content-Type": getContentType path
+        #"Content-Encoding": "gzip"
+        "Content-Length": content.length
+        "ETag": tag
+        "Vary": "Accept-Encoding"
+    @cache[url] = file
+    return file
 
 module.exports = Serve
