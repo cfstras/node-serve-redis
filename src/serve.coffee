@@ -30,6 +30,8 @@ class Serve
     @dir = path.resolve(options.dir ? process.cwd()) + path.sep
     @port = options.port ? 3000
 
+    @errors = options.errors ? {}
+    
     validmounts = (mount for mount in options.mounts when mount.path? and (typeof mount.handler == "function" or typeof mount.handler == "string"))
     @regexmounts = (mount for mount in validmounts when util.isRegExp mount.path)
 
@@ -61,7 +63,9 @@ class Serve
     addr = req.socket.remoteAddress + ":" + req.socket.remotePort
     url = req.url
     log.info addr, "wants "+url
+    @serve req, res, url
 
+  serve: (req, res, url) =>
     # check for direct mounts
     handler = @mounts[url]
     if handler?
@@ -125,24 +129,35 @@ class Serve
       return
     if fs.existsSync localpath
       log.debug "loading "+localpath
-      file = @load_and_cache localpath, url, (err, headers, content) ->
-        res.writeHead 200, headers
-        res.end content
+      file = @load_and_cache localpath, url, (err, headers, content) =>
+        if !err and headers? and content?
+          res.writeHead 200, headers
+          res.end content
+        else
+          @err404 url, localpath, req, res
       return
+    else
+      @err404 url, localpath, req, res
 
-    # nope.
-    log.info "404 " + url + " not found at "+localpath
+  err404: (url, localpath, req, res) =>
+    log.notice "404 " + url + " not found at "+localpath
     res.writeHead 404, "File not found"
-    res.end "404 File not found"
+    if @errors.hasOwnProperty(404) and @errors[404] != url
+      @serve req, res, @errors[404]
+    else
+      res.end "404 File not found"
 
-  load_and_cache: (path, url, callback) =>
-    fs.readFile path, (err, content) =>
+  load_and_cache: (localpath, url, callback) =>
+    if fs.statSync(localpath).isDirectory()
+      localpath += path.sep+'index.html'
+    fs.readFile localpath, (err, content) =>
       if err?
-        log.error "loading " + path + ": " + err
-        callback err, null
+        log.error "loading " + localpath + ": " + err
+        callback err, null, null
+        return
       tag = md5 content
       headers =
-        "Content-Type": getContentType path
+        "Content-Type": getContentType localpath
         #"Content-Encoding": "gzip"
         "Content-Length": content.length
         "ETag": tag
