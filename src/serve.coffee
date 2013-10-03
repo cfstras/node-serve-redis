@@ -6,8 +6,9 @@ path = require "path"
 fs = require "fs"
 crypto = require "crypto"
 redis = require "redis"
-liblog = require("log")
-log = new liblog("notice");
+zlib = require "zlib"
+liblog = require "log"
+log = new liblog "notice"
 
 md5 = (data) ->
   return crypto.createHash('md5').update(data).digest("hex")
@@ -30,10 +31,17 @@ class Serve
     @dir = path.resolve(options.dir ? process.cwd()) + path.sep
     @port = options.port ? 3000
 
+    log = new liblog(options.loglevel ? "notice")
+
     @errors = options.errors ? {}
-    
-    validmounts = (mount for mount in options.mounts when mount.path? and (typeof mount.handler == "function" or typeof mount.handler == "string"))
-    @regexmounts = (mount for mount in validmounts when util.isRegExp mount.path)
+
+    if options.mounts?
+      validmounts = (mount for mount in options.mounts when mount.path? and (typeof mount.handler == "function" or typeof mount.handler == "string"))
+      @regexmounts = (mount for mount in validmounts when util.isRegExp mount.path)
+    else
+      log.warning "no mounts defined"
+      validmounts = []
+      @regexmounts = []
 
     @mounts = []
     for mount in validmounts when typeof mount.path == 'string'
@@ -42,7 +50,7 @@ class Serve
     if options.redis?
       host = options.redis.host ? "localhost"
       port = options.redis.port ? 6379
-      @redis = redis.createClient port, host, {detect_buffers: true}
+      @redis = redis.createClient port, host, {return_buffers: true}
       @prefix = options.redis.prefix ? ""
       if options.redis.password?
         @redis.auth options.redis.password
@@ -66,20 +74,25 @@ class Serve
     @serve req, res, url
 
   serve: (req, res, url) =>
+    splits = url.split("?")
+    urlNoQuery = splits[0]
+    query = if splits[1]? then "?"+splits[1] else ""
+
     # check for direct mounts
-    handler = @mounts[url]
+    handler = @mounts[urlNoQuery]
     if handler?
-      log.debug "direct handler " + url
+      log.debug "direct handler " + urlNoQuery
       if typeof handler == "function"
         handler req, res
         return
       else
         # handler is a string defining an alias
-        url = handler
+        url = handler + query
+        urlNoQuery = handler
 
     # test all the regexes
     for mount in @regexmounts
-      if mount.path.test url
+      if mount.path.test url or mount.path.test urlNoQuery
         log.debug "direct regex handler " + mount.path
         if typeof mount.handler == "function"
           mount.handler req, res
@@ -87,6 +100,9 @@ class Serve
         else
           # handler is a string defining an alias
           url = mount.handler
+
+    # ok, there are no dynamic handlers. drop the query string
+    url = urlNoQuery
 
     # look in redis cache
     if @redis?
@@ -97,15 +113,22 @@ class Serve
           res.end "500 Internal Server Error"
           return
         if headers?
-          # get blob
-          @redis.get @prefix+"blob:"+headers.ETag, (err, content) =>
-            if err?
-              log.error "could not get "+headers.ETag+": " + err + ";" + content
-              res.writeHead 500, "Internal Server Error"
-              res.end "500 Internal Server Error"
-              return
-            res.writeHead 200, headers
-            res.end content
+          headers.ETag = headers.ETag.toString()
+          if req.headers["if-none-match"] == headers.ETag
+              # File is cached in browser
+              # Response: 304 Not Modified
+              res.writeHead 304, {"ETag": headers.Etag, "Vary": "Accept-Encoding"}
+              res.end()
+            else
+              # get blob
+              @redis.get @prefix+"blob:"+headers.ETag, (err, content) =>
+                if err?
+                  log.error "could not get "+headers.ETag+": " + err + ";" + content
+                  res.writeHead 500, "Internal Server Error"
+                  res.end "500 Internal Server Error"
+                  return
+                res.writeHead 200, headers
+                res.end content
         else # reply was null == file is not cached
           @load_and_serve url, req, res
       return
@@ -155,24 +178,30 @@ class Serve
         log.error "loading " + localpath + ": " + err
         callback err, null, null
         return
-      tag = md5 content
       headers =
-        "Content-Type": getContentType localpath
-        #"Content-Encoding": "gzip"
-        "Content-Length": content.length
-        "ETag": tag
-        "Vary": "Accept-Encoding"
-      if @redis?
-        @redis.hmset @prefix+"meta:"+url, headers, (err) =>
-          if err?
-            log.error "could not cache meta "+url+": " + err
-            return
-          @redis.set @prefix+"blob:"+tag, content, (err) =>
+          "Content-Type": getContentType localpath
+          "Vary": "Accept-Encoding"
+
+      zlib.gzip content, (err,gzipped) =>
+        if gzipped.length < content.length
+          content = gzipped
+          headers["Content-Encoding"] = "gzip"
+
+        tag = md5 content
+        headers["Content-Length"] = content.length
+        headers["ETag"] = tag
+
+        if @redis?
+          @redis.hmset @prefix+"meta:"+url, headers, (err) =>
             if err?
-              log.error "could not cache blob "+url+" "+tag+": " + err
-        callback err, headers, content
-      else
-        @cache[url] = {headers: headers, content: content}
-        callback err, headers, content
+              log.error "could not cache meta "+url+": " + err
+              return
+            @redis.set @prefix+"blob:"+tag, content, (err) =>
+              if err?
+                log.error "could not cache blob "+url+" "+tag+": " + err
+          callback err, headers, content
+        else
+          @cache[url] = {headers: headers, content: content}
+          callback err, headers, content
 
 module.exports = Serve
