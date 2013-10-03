@@ -135,10 +135,15 @@ class Serve
     else
       if @cache.hasOwnProperty url
         file = @cache[url]
-        log.debug "from cache: " + url
-        res.writeHead 200, file.headers
-        res.end file.content
-        return
+        if req.headers["if-none-match"] == file.headers.ETag
+          # File is cached in browser
+          # Response: 304 Not Modified
+          res.writeHead 304, {"ETag": file.headers.Etag, "Vary": "Accept-Encoding"}
+          res.end()
+        else
+          log.debug "from cache: " + url
+          res.writeHead 200, file.headers
+          res.end file.content
       else
         @load_and_serve url, req, res
 

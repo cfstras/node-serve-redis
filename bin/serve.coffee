@@ -3,6 +3,7 @@ Serve = require "../serve"
 options =
   https: false
   port: 3000
+  loglevel: "notice"
   dir: process.cwd() + "/../_site"
   redis:
     host: "localhost"
