@@ -1,5 +1,6 @@
 redis = require "redis"
 http = require "http"
+https = require "https"
 zlip = require "zlib"
 util = require "util"
 path = require "path"
@@ -59,7 +60,10 @@ class Serve
       log.warning "using local in-memory cache, no redis option given"
       @cache = {}
 
-    @server = http.createServer @handler
+    if options.https? and options.https.key? and options.https.cert?
+      @server = https.createServer options.https, @handler
+    else
+      @server = http.createServer @handler
     @server.on "listening", =>
       log.notice "serving " + @dir + " on port "+@port
       typeof callback == "function" && callback()

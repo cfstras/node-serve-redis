@@ -1,6 +1,11 @@
 Serve = require "../serve"
 
 options =
+###
+  https:
+    key: fs.readFileSync(path.resolve(config.basePath, config.https.privateKey))
+    cert: fs.readFileSync(path.resolve(config.basePath, config.https.certificate))
+###
   https: false
   port: 3000
   loglevel: "notice"
