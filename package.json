@@ -1,6 +1,6 @@
 {
   "name": "serve-redis",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "a caching, static, redis-backed HTTP file server",
   "main": "lib/serve.js",
   "scripts": {
